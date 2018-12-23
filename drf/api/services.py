@@ -11,7 +11,7 @@ from .models import FileInfo
 
 class Storage:
     def __init__(self, path: str, full_disk_encryption: bool = False):
-        print('Created!')
+        # print('Created!')
         self.__root_path = Path(path)
         self.__full_encryption = full_disk_encryption
         self.__cwd = Path(path)
@@ -21,6 +21,11 @@ class Storage:
     def root(self):
         return self.__root_path
 
+    @property
+    def cur_dir(self):
+        return self.__cwd
+
+    @property
     def pwd(self) -> str:
         """get working directory"""
         path = PurePosixPath(self.__cwd.relative_to(self.__root_path))
@@ -31,7 +36,7 @@ class Storage:
         path = PurePosixPath(path)
         full_path = self.__root_path / path
         if full_path.resolve() == self.__cwd:
-            return self.pwd()
+            return self.pwd
 
         if path.is_absolute():
             new_wd = self.__root_path.joinpath(*path.parts[1:])
@@ -44,7 +49,7 @@ class Storage:
             return "Directory does not exist"
 
         self.__content = set(self.__cwd.iterdir())
-        return self.pwd()
+        return self.pwd
 
     def ls(self) -> List[str]:
         """get current directory contents"""
@@ -66,7 +71,7 @@ class Storage:
                 return 'unknown'
 
     def get_dates(self, filename: str) -> Tuple[datetime, datetime, datetime]:
-        file = self.__cwd / filename
+        file = self.cur_dir / filename
         if file in self.__content:
             stat = file.stat()
             return (datetime.fromtimestamp(stat.st_ctime),
@@ -91,11 +96,12 @@ def get_files(path: Union[Path, str]) -> List[FileInfo]:
         raise ValidationError('Path is not a directory!')
     else:
         paths = []
-        storage.cd(path)
+        path = PurePosixPath('/') / path
+        storage.cd(str(path))
         for p in storage.ls():
             serializer = FileInfoSerializer(data={
                 'name': p,
-                'path': storage.pwd() + p,
+                'path': str(PurePosixPath(storage.pwd) / p),
                 'is_dir': storage.is_dir(p),
                 'size': storage.get_file_size(p),
                 'owner': storage.get_owner(p),
@@ -104,3 +110,36 @@ def get_files(path: Union[Path, str]) -> List[FileInfo]:
             serializer.is_valid(raise_exception=True)
             paths.append(serializer.save())
         return paths
+
+
+def get_filestream(path: Union[Path, str]):
+    file = storage.root / path
+    if not file.exists():
+        raise NotFound('File does not exist!')
+    elif file.is_dir():
+        raise ValidationError('Path is not a file!')
+    else:
+        return file.open('rb')
+
+
+def get_filename(path: Union[Path, str]) -> str:
+    file = storage.root / path
+    if not file.exists():
+        raise NotFound('File does not exist!')
+    elif file.is_dir():
+        raise ValidationError('Path is not a file!')
+    else:
+        return file.name
+
+
+def save_file(path: Union[Path, str], name: str, data: bytes) -> bool:
+    dest = storage.root / path
+    file = dest / name
+    if not dest.exists():
+        raise NotFound('Path does not exist!')
+    elif not dest.is_dir():
+        raise ValidationError('Path is not a directory!')
+    elif file.exists():
+        raise ValidationError('File already exists!')
+    else:
+        file.write_bytes(data)

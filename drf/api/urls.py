@@ -5,6 +5,8 @@ urlpatterns = [
     path('users/', include('users.urls')),
     path('rest-auth/', include('rest_auth.urls')),
     path('rest-auth/registration/', include('rest_auth.registration.urls')),
-    path('files/', views.FileList.as_view()),
-    path('files/<path:p>', views.FileList.as_view())
+    path('files/', views.FileInfoViewSet.as_view({'get': 'list'})),
+    path('files/<path:p>', views.FileInfoViewSet.as_view({'get': 'list'})),
+    path('file/get/<path:p>', views.FileInfoViewSet.as_view({'get': 'download', 'post': 'create'})),
+    path('file/get/', views.FileInfoViewSet.as_view({'get': 'download', 'post': 'create'})),
 ]
