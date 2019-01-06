@@ -1,3 +1,6 @@
+import os
+import shutil
+from io import BytesIO
 from typing import List, Union, Tuple
 from pathlib import Path, PurePosixPath
 from datetime import datetime
@@ -21,6 +24,16 @@ class Storage:
     def root(self):
         return self.__root_path
 
+    def chroot(self, path: Union[Path, str]) -> None:
+        """change root directory"""
+        path = Path(path)
+        if not path.is_absolute():
+            path = self.root / path
+        if path.exists() and path.is_dir():
+            self.__root_path = path.resolve()
+            self.__cwd = path.resolve()
+            self.__content = set(self.__cwd.iterdir())
+
     @property
     def cur_dir(self):
         return self.__cwd
@@ -31,18 +44,22 @@ class Storage:
         path = PurePosixPath(self.__cwd.relative_to(self.__root_path))
         return str("/" / path)
 
-    def cd(self, path: str) -> str:
+    def cd(self, path: Union[PurePosixPath, str] = '/') -> str:
         """change directory"""
-        path = PurePosixPath(path)
-        full_path = self.__root_path / path
-        if full_path.resolve() == self.__cwd:
+        path = PurePosixPath(path or '')
+        # if path is None:
+        #     new_wd = self.root
+        if path.root == '/':
+            new_wd = self.root.joinpath(*path.parts[1:])
+        elif path.is_absolute():
+            return "Absolute paths not allowed"
+        elif path == PurePosixPath(''):
             return self.pwd
-
-        if path.is_absolute():
-            new_wd = self.__root_path.joinpath(*path.parts[1:])
         else:
-            new_wd = self.__cwd / path
+            new_wd = self.cur_dir / path
 
+        if new_wd.resolve() == self.cur_dir:
+            return self.pwd
         if new_wd.exists() and new_wd.is_dir():
             self.__cwd = new_wd.resolve()
         else:
@@ -50,6 +67,12 @@ class Storage:
 
         self.__content = set(self.__cwd.iterdir())
         return self.pwd
+
+    def mkdir(self, dirname: Union[PurePosixPath, str]) -> None:
+        """create new directory"""
+        new_dir = self.cur_dir / dirname
+        if not new_dir.exists():
+            new_dir.mkdir(parents=True)
 
     def ls(self) -> List[str]:
         """get current directory contents"""
@@ -71,12 +94,15 @@ class Storage:
                 return 'unknown'
 
     def get_dates(self, filename: str) -> Tuple[datetime, datetime, datetime]:
-        file = self.cur_dir / filename
+        file = self.cur_dir / (filename or '')
         if file in self.__content:
             stat = file.stat()
             return (datetime.fromtimestamp(stat.st_ctime),
                     datetime.fromtimestamp(stat.st_atime),
                     datetime.fromtimestamp(stat.st_mtime))
+        return (datetime.fromtimestamp(0),
+                datetime.fromtimestamp(0),
+                datetime.fromtimestamp(0))
 
     def is_dir(self, filename: str) -> bool:
         file = self.__cwd / filename
@@ -84,62 +110,118 @@ class Storage:
             return file.is_dir()
         return False
 
-
-storage = Storage(R"D:\Robert\Downloads\Studia\TAI")
-
-
-def get_files(path: Union[Path, str]) -> List[FileInfo]:
-    directory = storage.root / path
-    if not directory.exists():
-        raise NotFound('Directory does not exist!')
-    elif not directory.is_dir():
-        raise ValidationError('Path is not a directory!')
-    else:
-        paths = []
-        path = PurePosixPath('/') / path
-        storage.cd(str(path))
-        for p in storage.ls():
-            serializer = FileInfoSerializer(data={
-                'name': p,
-                'path': str(PurePosixPath(storage.pwd) / p),
-                'is_dir': storage.is_dir(p),
-                'size': storage.get_file_size(p),
-                'owner': storage.get_owner(p),
-                'creation_date': storage.get_dates(p)[0]
-            })
-            serializer.is_valid(raise_exception=True)
-            paths.append(serializer.save())
-        return paths
+    def rm(self, path: Union[PurePosixPath, str]):
+        """delete file or directory from disk"""
+        path = self.cur_dir / (path or '')
+        if path.exists():
+            if path.is_file():
+                os.remove(path)
+            elif path.is_dir():
+                shutil.rmtree(path)
 
 
-def get_filestream(path: Union[Path, str]):
-    file = storage.root / path
-    if not file.exists():
-        raise NotFound('File does not exist!')
-    elif file.is_dir():
-        raise ValidationError('Path is not a file!')
-    else:
-        return file.open('rb')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+storage = Storage(BASE_DIR)
+storage.mkdir('Storage')
+storage.chroot('Storage')
 
 
-def get_filename(path: Union[Path, str]) -> str:
-    file = storage.root / path
-    if not file.exists():
-        raise NotFound('File does not exist!')
-    elif file.is_dir():
-        raise ValidationError('Path is not a file!')
-    else:
-        return file.name
+class FileStorageService:
 
+    @staticmethod
+    def get_files(path: Union[Path, str] = '', user: str = '') -> List[FileInfo]:
+        # path = path or ''
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        directory = storage.cur_dir / path
+        if not directory.exists():
+            raise NotFound('Directory does not exist!')
+        elif not directory.is_dir():
+            raise ValidationError('Path is not a directory!')
+        else:
+            paths = []
+            storage.cd(path)
+            filepath = PurePosixPath(storage.pwd)
+            filepath = PurePosixPath(filepath.parts[0], *filepath.parts[2:])
+            for p in storage.ls():
+                serializer = FileInfoSerializer(data={
+                    'name': p,
+                    'path': str(filepath / p),
+                    'is_dir': storage.is_dir(p),
+                    'size': storage.get_file_size(p),
+                    'owner': user or 'unknown',
+                    'creation_date': storage.get_dates(p)[0]
+                })
+                serializer.is_valid(raise_exception=True)
+                paths.append(serializer.save())
+            return paths
 
-def save_file(path: Union[Path, str], name: str, data: bytes) -> bool:
-    dest = storage.root / path
-    file = dest / name
-    if not dest.exists():
-        raise NotFound('Path does not exist!')
-    elif not dest.is_dir():
-        raise ValidationError('Path is not a directory!')
-    elif file.exists():
-        raise ValidationError('File already exists!')
-    else:
-        file.write_bytes(data)
+    @staticmethod
+    def get_filestream(path: Union[Path, str] = '', user: str = ''):
+        # path = path or ''
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        file = storage.cur_dir / path
+        if not file.exists():
+            raise NotFound('File does not exist!')
+        elif file.is_dir():
+            raise ValidationError('Path is not a file!')
+        else:
+            return file.open('rb')
+
+    @staticmethod
+    def get_filename(path: Union[Path, str] = '', user: str = '') -> str:
+        # path = path or ''
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        file = storage.cur_dir / path
+        if not file.exists():
+            raise NotFound('File does not exist!')
+        elif file.is_dir():
+            raise ValidationError('Path is not a file!')
+        else:
+            return file.name
+
+    @staticmethod
+    def save_file(path: Union[Path, str], name: str, data: BytesIO, user: str = '') -> None:
+        # path = path or ''
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        dest = storage.cur_dir / path
+        file = dest / name
+        if not dest.exists():
+            raise NotFound('Path does not exist!')
+        elif not dest.is_dir():
+            raise ValidationError('Path is not a directory!')
+        elif file.exists():
+            raise ValidationError('File already exists!')
+        try:
+            file.write_bytes(data.read(-1))
+        except:
+            raise ValidationError('File could not be uploaded')
+
+    @staticmethod
+    def create_directory(path: Union[Path, str] = '', user: str = '') -> None:
+        # path = path or ''
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        directory = storage.cur_dir / path
+        if directory.exists():
+            raise ValidationError('Directory already exists')
+        storage.mkdir(path)
+
+    @staticmethod
+    def remove(path: Union[Path, str] = '', user: str = '') -> None:
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        file = storage.cur_dir / path
+        if not file.exists():
+            raise NotFound('File or directory does not exist!')
+        else:
+            storage.rm(path)
