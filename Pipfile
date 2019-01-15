@@ -10,6 +10,7 @@ django = "*"
 djangorestframework = "*"
 django-rest-auth = "*"
 django-allauth = "*"
+django-friendship = "*"
 
 [requires]
 python_version = "3.7"

@@ -81,7 +81,7 @@ class Storage:
     def get_file_size(self, filename) -> int:
         """get the size of a file"""
         file = self.__cwd / filename
-        if file in self.__content:
+        if file.exists():
             stat = file.stat()
             return stat.st_size
 
@@ -95,18 +95,26 @@ class Storage:
 
     def get_dates(self, filename: str) -> Tuple[datetime, datetime, datetime]:
         file = self.cur_dir / (filename or '')
-        if file in self.__content:
+        if file.exists():
             stat = file.stat()
             return (datetime.fromtimestamp(stat.st_ctime),
                     datetime.fromtimestamp(stat.st_atime),
                     datetime.fromtimestamp(stat.st_mtime))
-        return (datetime.fromtimestamp(0),
-                datetime.fromtimestamp(0),
-                datetime.fromtimestamp(0))
+        timestamp = 0
+        for timestamp in range(0, 10000000, 86400):
+            try:
+                datetime.fromtimestamp(timestamp)
+            except:
+                pass
+            else:
+                break
+        return (datetime.fromtimestamp(timestamp),
+                datetime.fromtimestamp(timestamp),
+                datetime.fromtimestamp(timestamp))
 
     def is_dir(self, filename: str) -> bool:
         file = self.__cwd / filename
-        if file in self.__content:
+        if file.exists():
             return file.is_dir()
         return False
 
@@ -129,11 +137,42 @@ storage.chroot('Storage')
 class FileStorageService:
 
     @staticmethod
+    def get_dir_entry(path: Union[Path, str] = '', user: str = '') -> FileInfo:
+        userpath = PurePosixPath('/', user or '')
+        path = PurePosixPath(path or '')
+        storage.cd(userpath)
+        if path == PurePosixPath('/'):
+            path = PurePosixPath('')
+        elif str(path).startswith('//'):
+            path = PurePosixPath(*path.parts[1:])
+        elif path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
+        entry = storage.cur_dir / path
+        if not entry.exists():
+            raise ValidationError('File or directory does not exist')
+        serializer = FileInfoSerializer(data={
+            'name': entry.name,
+            'path': str(path),
+            'is_dir': storage.is_dir(str(path)),
+            'size': storage.get_file_size(path),
+            'owner': user or 'unknown',
+            'creation_date': storage.get_dates(str(path))[0]
+        })
+        serializer.is_valid(raise_exception=True)
+        return serializer.save()
+
+    @staticmethod
     def get_files(path: Union[Path, str] = '', user: str = '') -> List[FileInfo]:
         # path = path or ''
         userpath = PurePosixPath('/', user or '')
         path = PurePosixPath(path or '')
         storage.cd(userpath)
+        if path == PurePosixPath('/'):
+            path = PurePosixPath('')
+        elif str(path).startswith('//'):
+            path = PurePosixPath(*path.parts[1:])
+        elif path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
         directory = storage.cur_dir / path
         if not directory.exists():
             raise NotFound('Directory does not exist!')
@@ -162,6 +201,10 @@ class FileStorageService:
         # path = path or ''
         userpath = PurePosixPath('/', user or '')
         path = PurePosixPath(path or '')
+        if str(path).startswith('//'):
+            path = PurePosixPath(*path.parts[1:])
+        elif path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
         storage.cd(userpath)
         file = storage.cur_dir / path
         if not file.exists():
@@ -190,6 +233,8 @@ class FileStorageService:
         # path = path or ''
         userpath = PurePosixPath('/', user or '')
         path = PurePosixPath(path or '')
+        if path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
         storage.cd(userpath)
         dest = storage.cur_dir / path
         file = dest / name
@@ -209,6 +254,8 @@ class FileStorageService:
         # path = path or ''
         userpath = PurePosixPath('/', user or '')
         path = PurePosixPath(path or '')
+        if path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
         storage.cd(userpath)
         directory = storage.cur_dir / path
         if directory.exists():
@@ -219,6 +266,8 @@ class FileStorageService:
     def remove(path: Union[Path, str] = '', user: str = '') -> None:
         userpath = PurePosixPath('/', user or '')
         path = PurePosixPath(path or '')
+        if path.root == '/':
+            path = PurePosixPath(*path.parts[1:])
         storage.cd(userpath)
         file = storage.cur_dir / path
         if not file.exists():
