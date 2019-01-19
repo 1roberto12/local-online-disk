@@ -22,7 +22,7 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
         User = get_user_model()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        other_user = User.objects.get(pk=request.POST.get('to_user'))
+        other_user = User.objects.get(pk=request.data.get('to_user'))
         try:
             r = Friend.objects.add_friend(
                 request.user,
@@ -42,10 +42,10 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
         User = get_user_model()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        other_user = User.objects.get(pk=request.POST.get('to_user'))
+        other_user = User.objects.get(pk=request.data.get('to_user'))
         Friend.objects.remove_friend(request.user, other_user)
         return Response({'status': 'Friend removed'}, status=201)
 
     def sentRequestList(self, request, *args, **kwargs):
         self.queryset = Friend.objects.sent_requests(user=request.user)
-        return super().list(request, *args, **kwargs)
+        return   super().list(request, *args, **kwargs)
