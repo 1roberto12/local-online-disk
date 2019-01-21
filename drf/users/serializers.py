@@ -8,8 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = models.CustomUser
         fields = ('id', 'email', 'username',)
 
-
-class FriendRequestSerializer(serializers.ModelSerializer):
+class FriendshipSerializer(serializers.ModelSerializer):
     class Meta:
         model = FriendshipRequest
-        fields = ('to_user', 'created')
+        fields = ('to_user', 'from_user', 'created')
