@@ -65,6 +65,13 @@ Each new user gets his own directory inside it named after his username.
        * GET - get a list of unrejected requests sent to current user
      * rejectedRequestList/
        * GET - get a list of rejected requests sent to current user
+     * stats/?dir={path}
+       * GET - get download statistics for selected directory (it has to start with '/')  
+               response objects with count = -1 indicate directories  
+               if query parameter 'dir' id not present, get statistics for root folder  
+               Example:  
+               
+               /api/v1/users/stats/?dir=/test/a # get download statistics for the content of /test/a 
   * rest-auth/  
     * https://django-rest-auth.readthedocs.io/en/latest/api_endpoints.html
   * files/

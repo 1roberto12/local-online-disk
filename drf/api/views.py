@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.http import FileResponse
 from rest_framework import status, generics, viewsets, mixins
 from rest_framework.renderers import JSONRenderer
@@ -9,7 +11,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 
 from .permissions import IsPublicOrSharedWithMe
-from .models import SharedFile
+from .models import SharedFile, FileInfo, DownloadStatistic
 from .serializers import FileInfoSerializer, SharedFileSerializer
 from .services import FileStorageService
 
@@ -34,6 +36,11 @@ class FileInfoView(generics.ListCreateAPIView, generics.DestroyAPIView, generics
         entry = FileStorageService.get_dir_entry(p, user=request.user.username)
         if entry.is_dir:
             self.queryset = FileStorageService.get_files(p, user=request.user.username)
+            for f in self.queryset:
+                path = f.path[:-len(f.name) - 1]
+                path = '/' if path == '' else path
+                DownloadStatistic.objects.get_or_create(filename=f.name, path=path, user=request.user,
+                                                        defaults={'count': -1 if f.is_dir else 0})
             return super().list(request, *args, **kwargs)
         else:
             return self.download(request, p, *args, **kwargs)
@@ -41,9 +48,14 @@ class FileInfoView(generics.ListCreateAPIView, generics.DestroyAPIView, generics
     def download(self, request, p=None, *args, **kwargs):
         self.check_user_folder(request)
         obj = FileStorageService.get_filestream(p, user=request.user.username)
+        filename = FileStorageService.get_filename(p, user=request.user.username)
+        stat = DownloadStatistic.objects.filter(path=p, filename=filename, user=request.user, day=date.today)
+        if len(stat) == 1:
+            stat.update(count=stat[0].count + 1)
+        else:
+            DownloadStatistic.objects.create(path=p, filename=filename, user=request.user, count=1)
         response = FileResponse(obj)
-        response['Content-Disposition'] = \
-            f'attachment; filename= "{FileStorageService.get_filename(p, user=request.user.username)}"'
+        response['Content-Disposition'] = f'attachment; filename= "{filename}"'
         return response
 
     def post(self, request, p=None, *args, **kwargs):
@@ -51,6 +63,7 @@ class FileInfoView(generics.ListCreateAPIView, generics.DestroyAPIView, generics
         if 'f' in request.FILES:
             FileStorageService.save_file(p, request.FILES['f'].name, request.FILES['f'].file,
                                          user=request.user.username)
+            DownloadStatistic.objects.create(path=(p or '/'), filename=request.FILES['f'].name, user=request.user)
         else:
             try:
                 FileStorageService.get_dir_entry(p, user=request.user.username)
@@ -63,6 +76,10 @@ class FileInfoView(generics.ListCreateAPIView, generics.DestroyAPIView, generics
     def delete(self, request, p=None, *args, **kwargs):
         self.check_user_folder(request)
         FileStorageService.remove(p, user=request.user.username)
+        filename = p[p.rfind('/') + 1:]
+        path = p[:-len(filename) - 1]
+        path = '/' if path == '' else path
+        DownloadStatistic.objects.filter(path=path, filename=filename, user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -80,14 +97,20 @@ class FileSharingView(generics.ListCreateAPIView, generics.RetrieveUpdateDestroy
             if p is not None:
                 entry = FileStorageService.get_dir_entry(instance.path + '/' + p, user=instance.owner.username)
                 if entry.is_dir:
-                    self.queryset = FileStorageService.get_files(instance.path + '/' + p, user=instance.owner.username)
+                    self.queryset = list(
+                        map(lambda f: FileInfo(name=f.name, path='/' + p + '/' + f.name, is_dir=f.is_dir, size=f.size,
+                                               owner=f.owner, creation_date=f.creation_date),
+                            FileStorageService.get_files(instance.path + '/' + p, user=instance.owner.username)))
                 else:
                     obj = FileStorageService.get_filestream(instance.path + '/' + p, user=instance.owner.username)
                     response = FileResponse(obj)
                     response['Content-Disposition'] = f'attachment; filename= "{entry.name}"'
                     return response
             else:
-                self.queryset = FileStorageService.get_files(instance.path, user=instance.owner.username)
+                self.queryset = list(
+                    map(lambda f: FileInfo(name=f.name, path='/' + f.name, is_dir=f.is_dir, size=f.size, owner=f.owner,
+                                           creation_date=f.creation_date),
+                        FileStorageService.get_files(instance.path, user=instance.owner.username)))
             return super().list(request, *args, **kwargs)
         else:
             if p is not None:
@@ -112,7 +135,9 @@ class FileSharingView(generics.ListCreateAPIView, generics.RetrieveUpdateDestroy
 
     def perform_create(self, serializer: SharedFileSerializer):
         try:
-            FileStorageService.get_dir_entry(serializer.validated_data['path'], user=self.request.user.username)
+            entry = FileStorageService.get_dir_entry(serializer.validated_data['path'], user=self.request.user.username)
         except ValidationError:
             raise
-        serializer.save(owner=self.request.user)
+
+        serializer.save(owner=self.request.user, filename=entry.name, is_dir=entry.is_dir, size=entry.size,
+                        creation_date=entry.creation_date)

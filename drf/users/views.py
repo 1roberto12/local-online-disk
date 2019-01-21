@@ -1,4 +1,5 @@
 from django.db import IntegrityError
+from django.apps import apps as django_apps
 from friendship.models import Friend, Follow, Block
 from rest_framework import status, generics, viewsets, mixins
 from rest_framework.response import Response
@@ -72,3 +73,17 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
         friend_request = FriendshipRequest.objects.get(from_user=request.data.get('from_user'))
         friend_request.reject()
         return Response({'status': 'Request rejected'}, status=201)
+
+class StatisticsView(generics.ListAPIView):
+    serializer_class = serializers.DownloadStatisticSerializer
+    permission_classes = (IsAuthenticated, )
+
+    def get_queryset(self):
+        DownloadStatistic = django_apps.get_model('api', 'DownloadStatistic')
+        queryset = DownloadStatistic.objects.filter(user=self.request.user)
+        file = self.request.query_params.get('dir', None)
+        if file is not None:
+            queryset = filter(lambda stat: '/' not in stat.path[len(file):], queryset.filter(path=file))
+        else:
+            queryset = queryset.exclude(path__regex=r'/.+')
+        return queryset

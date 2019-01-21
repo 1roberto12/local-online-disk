@@ -13,4 +13,5 @@ urlpatterns = [
     path('rejectedRequestList/', views.FriendshipView.as_view({'get': 'rejectedRequestList'})),
     path('acceptRequest/', views.FriendshipView.as_view({'post': 'acceptRequest'})),
     path('rejectRequest/', views.FriendshipView.as_view({'post': 'rejectRequest'})),
+    path('stats/', views.StatisticsView.as_view())
 ]
