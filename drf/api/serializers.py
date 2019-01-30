@@ -13,4 +13,4 @@ class SharedFileSerializer(serializers.ModelSerializer):
         model = SharedFile
         fields = ('id', 'filename', 'is_dir', 'size', 'creation_date', 'path', 'owner', 'is_public', 'shared_with')
         read_only_fields = ('id', 'owner', 'filename', 'is_dir', 'size', 'creation_date')
-        extra_kwargs = {'path': {'write_only': True}}
+        # extra_kwargs = {'path': {'write_only': True}}

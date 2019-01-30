@@ -7,10 +7,9 @@ urlpatterns = [
     path('rest-auth/registration/', include('rest_auth.registration.urls')),
     path('files/', views.FileInfoView.as_view()),
     path('files/<path:p>', views.FileInfoView.as_view()),
-    # path('file/get/<path:p>', views.FileInfoViewSet.as_view({'get': 'download', 'post': 'create', 'delete': 'destroy'})),
-    # path('file/get/', views.FileInfoViewSet.as_view({'get': 'download', 'post': 'create'})),
     path('share/', views.FileSharingView.as_view()),
     path('share/my/', views.FileSharingView.as_view()),
     path('share/<uuid:id>', views.FileSharingView.as_view()),
     path('share/<uuid:id>/<path:p>', views.FileSharingView.as_view()),
+    path('encrypt/<path:p>', views.EncryptionView.as_view()),
 ]

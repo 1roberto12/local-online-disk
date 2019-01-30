@@ -14,10 +14,9 @@ class UserListView(generics.ListCreateAPIView):
     queryset = models.CustomUser.objects.all()
     serializer_class = serializers.UserSerializer
 
-
-class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin,
+class FriendshipViewTo(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin,
                      mixins.DestroyModelMixin, viewsets.GenericViewSet):
-    serializer_class = serializers.FriendshipSerializer
+    serializer_class = serializers.ToRequestSerializer
     permission_classes = (IsAuthenticated,)
 
     def sendRequest(self, request):
@@ -32,8 +31,16 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
                 message='Hi! I would like to add you')
         except IntegrityError:
             return Response({'status': 'Friendship already requested'}, status=201)
-        #r.accept()
         return Response({'status': 'Request sent'}, status=201)
+
+    def sentRequestList(self, request, *args, **kwargs):
+        self.queryset = Friend.objects.sent_requests(user=request.user)
+        return   super().list(request, *args, **kwargs)
+
+class FriendshipViewFrom(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.UpdateModelMixin,
+                     mixins.DestroyModelMixin, viewsets.GenericViewSet):
+    serializer_class = serializers.FromRequestSerializer
+    permission_classes = (IsAuthenticated,)
 
     def friendsList(self, request, *args, **kwargs):
         self.serializer_class = serializers.UserSerializer
@@ -44,13 +51,9 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
         User = get_user_model()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        other_user = User.objects.get(pk=request.data.get('to_user'))
+        other_user = User.objects.get(pk=request.data.get('from_user'))
         Friend.objects.remove_friend(request.user, other_user)
         return Response({'status': 'Friend removed'}, status=201)
-
-    def sentRequestList(self, request, *args, **kwargs):
-        self.queryset = Friend.objects.sent_requests(user=request.user)
-        return   super().list(request, *args, **kwargs)
 
     def unreadRequestList(self, request, *args, **kwargs):
         self.queryset = Friend.objects.unread_requests(user=request.user)
@@ -73,6 +76,7 @@ class FriendshipView(mixins.ListModelMixin, mixins.CreateModelMixin, mixins.Upda
         friend_request = FriendshipRequest.objects.get(from_user=request.data.get('from_user'))
         friend_request.reject()
         return Response({'status': 'Request rejected'}, status=201)
+
 
 class StatisticsView(generics.ListAPIView):
     serializer_class = serializers.DownloadStatisticSerializer

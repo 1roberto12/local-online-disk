@@ -49,7 +49,7 @@ class FileInfoView(generics.ListCreateAPIView, generics.DestroyAPIView, generics
         self.check_user_folder(request)
         obj = FileStorageService.get_filestream(p, user=request.user.username)
         filename = FileStorageService.get_filename(p, user=request.user.username)
-        stat = DownloadStatistic.objects.filter(path=p, filename=filename, user=request.user, day=date.today)
+        stat = DownloadStatistic.objects.filter(path=p, filename=filename, user=request.user, day=date.today())
         if len(stat) == 1:
             stat.update(count=stat[0].count + 1)
         else:
@@ -141,3 +141,21 @@ class FileSharingView(generics.ListCreateAPIView, generics.RetrieveUpdateDestroy
 
         serializer.save(owner=self.request.user, filename=entry.name, is_dir=entry.is_dir, size=entry.size,
                         creation_date=entry.creation_date)
+
+
+class EncryptionView(generics.GenericAPIView):
+    queryset = []
+    permission_classes = (IsAuthenticated, )
+
+    def post(self, request, p=None, *args, **kwargs):
+        FileInfoView.check_user_folder(request)
+        entry = FileStorageService.get_dir_entry(p, user=request.user.username)
+        if entry.is_dir:
+            raise ValidationError('Cannot encrypt directory')
+        if 'password' not in request.data:
+            raise ValidationError({'password': ['This field is required.']})
+        if 'decrypt' not in request.data:
+            FileStorageService.encrypt(entry, request.data['password'])
+        else:
+            FileStorageService.decrypt(entry, request.data['password'])
+        return Response(status=status.HTTP_200_OK)

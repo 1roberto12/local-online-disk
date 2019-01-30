@@ -1,17 +1,18 @@
 # localOnlineDisk
 
-Aplikacja, za pomoc¹ której u¿ytkownik mo¿e zarz¹dzaæ zawartoœci¹ dysku komputerowego z poziomu strony internetowej. G³ówne funkcjonalnoœci:
+Aplikacja, za pomocą której użytkownik może zarządzać zawartością dysku komputerowego z poziomu strony internetowej. Główne funkcjonalności:
 
-- przesy³anie plików na dysk
+- przesyłanie plików na dysk
 - pobieranie plików z dysku
 - usuwanie plików z dysku
 - tworzenie struktury katalogów (dodawanie/usuwanie katalogów)
-- wyœwietlanie danych o plikach (rozmiar, data dodania, itp.)
-- udostêpnianie plików w postaci linków do pobrania
-- mo¿liwoœæ wspó³dzielenia zasobów pomiêdzy u¿ytkownikami, dodanymi do znajomych
-- szyfrowanie zawartoœci dysku lub pojedynczego pliku
+- wyświetlanie danych o plikach (rozmiar, data dodania, itp.)
+- udostępnianie plików w postaci linków do pobrania
+- możliwość współdzielenia zasobów pomiędzy użytkownikami, dodanymi do znajomych
+- szyfrowanie zawartości dysku lub pojedynczego pliku
 - wznowienie pobierania plików w przypadku przerwania pobierania
 - statystyki pobierania
+
 
 ### 1. Installation
 #### 1.1 Prerequisites
@@ -36,28 +37,24 @@ Each new user gets his own directory inside it named after his username.
     * send/
       * POST - send friendship request to another user  
         Params:
-           * to_user - recipient user id
-           * from_user - current user id
+           * to_user - other user ID
            * created - date
     * friendsList/
       * GET - get a list of friends of the current user
     * removefriend/
       * POST - removes friend from friends list  
         Params:
-          * to_user - removed user id
-          * from_user - current user id
+          * from_user - other user ID
           * created - date
     * acceptRequest/
       * POST - accepts request from user
         Params:
-          * to_user - current user id
-          * from_user - sender user id
+          * from_user - other user ID
           * created - data
      * rejectRequest/
        * POST - rejects request from user
          Params:
-          * to_user - current user id
-          * from_user - sender user id
+          * from_user - other user ID
           * created - data
      * unreadRequestList/
        * GET - get a list of unread requests sent to current user
@@ -91,14 +88,19 @@ Each new user gets his own directory inside it named after his username.
     * POST - share a file or directory  
       Params:
         * path - path to file/directory
-        * is_public - if file/directory should be public (accesible by non logged in users)
+        * is_public - if file/directory should be public (accessible by non logged in users)
         * shared_with - list of users (friends) which should have access to the resource
   * share/{uuid}
     * GET - download or list shared resource indicated by {uuid}
     * DELETE - unshare a resource
   * share/{uuid}/{path} - {uuid} should be a directory
     * GET - download or list shared resource indicated by {path} inside {uuid}
-    * POST - not working yet
-    * DELETE - not working yet
   * share/my/
     * GET - list all files and directories shared by me
+  * encrypt/{path}
+    * POST - encrypt or decrypt a file; new file will have the suffix '~encrypted' added, this way 
+    it can be distinguished between encrypted and unencrypted files (the old file will be deleted)  
+      Params:
+        * password - passwod used for encryption/decryption
+        * decrypt - optional parameter; when used the file wile be decrypted
+        (value of parameter is not important); when absent file will be encrypted

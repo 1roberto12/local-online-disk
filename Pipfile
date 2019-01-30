@@ -11,6 +11,8 @@ djangorestframework = "*"
 django-rest-auth = "*"
 django-allauth = "*"
 django-friendship = "*"
+cryptography = "*"
+django-cors-headers = "*"
 
 [requires]
 python_version = "3.7"

@@ -1,12 +1,12 @@
-import os
-import shutil
+import hashlib, os, shutil, base64
 from io import BytesIO
 from typing import List, Union, Tuple
 from pathlib import Path, PurePosixPath
 from datetime import datetime
+from cryptography.fernet import Fernet
 
 from rest_framework.exceptions import NotFound, ValidationError
-import rest_framework.exceptions as ex
+# import rest_framework.exceptions as ex
 
 from .serializers import FileInfoSerializer
 from .models import FileInfo
@@ -274,3 +274,34 @@ class FileStorageService:
             raise NotFound('File or directory does not exist!')
         else:
             storage.rm(path)
+
+    @staticmethod
+    def encrypt(file: FileInfo, password: str) -> None:
+        hasher = hashlib.sha256()
+        hasher.update(bytes(password, 'utf-8'))
+        key = hasher.digest()
+        crypter = Fernet(base64.b64encode(key))
+        storage.cd()
+        storage.cd(file.owner)
+        full_path = storage.cur_dir / file.path
+        with open(full_path, 'rb') as plain:
+            encrypted = crypter.encrypt(plain.read())
+        with open(str(full_path) + '~encrypted', 'wb') as new_encrypted:
+            new_encrypted.write(encrypted)
+        storage.rm(file.path)
+
+    @staticmethod
+    def decrypt(file: FileInfo, password: str) -> None:
+        hasher = hashlib.sha256()
+        hasher.update(bytes(password, 'utf-8'))
+        key = hasher.digest()
+        crypter = Fernet(base64.b64encode(key))
+        storage.cd()
+        storage.cd(file.owner)
+        full_path = storage.cur_dir / file.path
+        with open(full_path, 'rb') as encrypted:
+            plain = crypter.decrypt(encrypted.read())
+        name = str(full_path)[:-len('~encrypted')]
+        with open(name, 'wb') as new_plain:
+            new_plain.write(plain)
+        storage.rm(file.path)
